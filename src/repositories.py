@@ -15,30 +15,11 @@ env_path = Path(__file__).parent.parent / ".env"
 if env_path.exists():
     load_dotenv(env_path)
 
-# Import Firestore client from MCP project
-# Note: In production, these could be shared via a common package
-# For now, we'll import directly (requires MCP to be in Python path or installed)
-try:
-    # Try importing from installed package
-    from vibe_trade_mcp.db.firestore_client import FirestoreClient
-    from vibe_trade_mcp.db.card_repository import CardRepository
-    from vibe_trade_mcp.db.strategy_repository import StrategyRepository
-except ImportError:
-    # Fallback: import from relative path (for development)
-    import sys
-    from pathlib import Path
-
-    mcp_path = Path(__file__).parent.parent.parent / "vibe-trade-mcp" / "src"
-    if mcp_path.exists():
-        sys.path.insert(0, str(mcp_path.parent))
-        from db.firestore_client import FirestoreClient
-        from db.card_repository import CardRepository
-        from db.strategy_repository import StrategyRepository
-    else:
-        raise ImportError(
-            "Could not import MCP repositories. "
-            "Ensure vibe-trade-mcp is installed or in the Python path."
-        )
+# Import Firestore client from MCP package
+# vibe-trade-mcp is installed as a Python package dependency
+from vibe_trade_mcp.db.firestore_client import FirestoreClient
+from vibe_trade_mcp.db.card_repository import CardRepository
+from vibe_trade_mcp.db.strategy_repository import StrategyRepository
 
 # Initialize Firestore client
 project = os.getenv("GOOGLE_CLOUD_PROJECT")
