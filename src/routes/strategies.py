@@ -31,15 +31,14 @@ async def list_strategies(
     Returns:
         List of user's strategies
     """
-    # Get all strategies and filter by owner_id
-    # TODO: Add get_by_owner_id method to StrategyRepository for efficiency
-    all_strategies = strategy_repository.get_all()
-    user_strategies = [s for s in all_strategies if s.owner_id == user_id]
+    # Use the new get_by_owner_id method for efficiency
+    user_strategies = strategy_repository.get_by_owner_id(user_id)
 
     return [
         {
             "id": s.id,
             "owner_id": s.owner_id,
+            "thread_id": s.thread_id,
             "name": s.name,
             "status": s.status,
             "universe": s.universe,
@@ -100,6 +99,7 @@ async def get_strategy_with_cards(
         strategy={
             "id": strategy.id,
             "owner_id": strategy.owner_id,
+            "thread_id": strategy.thread_id,
             "name": strategy.name,
             "status": strategy.status,
             "universe": strategy.universe,
@@ -156,13 +156,52 @@ async def get_strategy_by_thread(
             detail="Access denied: thread belongs to another user",
         )
 
-    # Check if thread has linked strategy
-    if not thread.strategy_id:
+    # Try to get strategy by thread_id first (new approach)
+    strategy = strategy_repository.get_by_thread_id(thread_id)
+    
+    # Fallback to thread.strategy_id if no strategy found by thread_id (backward compatible)
+    if not strategy and thread.strategy_id:
+        strategy = strategy_repository.get_by_id(thread.strategy_id)
+    
+    if not strategy:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {thread_id} has no linked strategy",
         )
-
-    # Get strategy (already verified user owns thread, so strategy ownership is implied)
-    return await get_strategy_with_cards(thread.strategy_id, user_id)
+    
+    # Verify user owns this strategy
+    if strategy.owner_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: strategy belongs to another user",
+        )
+    
+    # Get all cards attached to this strategy
+    cards = []
+    for attachment in strategy.attachments:
+        card = card_repository.get_by_id(attachment.card_id)
+        if card:
+            # Include card data with attachment metadata
+            card_dict = card.model_dump()
+            card_dict["role"] = attachment.role
+            card_dict["enabled"] = attachment.enabled
+            card_dict["overrides"] = attachment.overrides
+            cards.append(card_dict)
+    
+    return StrategyWithCardsResponse(
+        strategy={
+            "id": strategy.id,
+            "owner_id": strategy.owner_id,
+            "thread_id": strategy.thread_id,
+            "name": strategy.name,
+            "status": strategy.status,
+            "universe": strategy.universe,
+            "attachments": [att.model_dump() for att in strategy.attachments],
+            "version": strategy.version,
+            "created_at": strategy.created_at,
+            "updated_at": strategy.updated_at,
+        },
+        cards=cards,
+        card_count=len(cards),
+    )
 
