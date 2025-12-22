@@ -1,0 +1,2 @@
+"""Vibe Trade API package."""
+
