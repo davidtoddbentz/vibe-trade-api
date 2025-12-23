@@ -1,19 +1,19 @@
 # Vibe Trade API
 
-FastAPI server for vibe-trade with JWT authentication and user-scoped data access.
+FastAPI server for vibe-trade with Firebase authentication and user-scoped data access.
 
 ## Overview
 
 This API provides user-facing endpoints for:
 - Thread management (persistent agent conversations)
 - Strategy access (user-scoped)
-- JWT authentication via NextAuth tokens
+- Firebase authentication via ID tokens
 
 ## Architecture
 
-- **Authentication**: JWT tokens from NextAuth (validated via `NEXTAUTH_SECRET`)
+- **Authentication**: Firebase ID tokens (validated via Firebase Admin SDK)
 - **Data Access**: Direct Firestore access (shared repositories with MCP)
-- **User Scoping**: All data operations are scoped to `user_id` extracted from verified JWT headers
+- **User Scoping**: All data operations are scoped to `user_id` extracted from verified Firebase tokens
 
 ## Setup
 
@@ -21,7 +21,7 @@ This API provides user-facing endpoints for:
 
 - Python 3.10+
 - Google Cloud Project with Firestore
-- NextAuth secret (must match UI's `NEXTAUTH_SECRET`)
+- Firebase project (for authentication)
 
 ### Installation
 
@@ -42,15 +42,14 @@ Create a `.env` file:
 GOOGLE_CLOUD_PROJECT=your-project-id
 FIRESTORE_DATABASE=strategy  # or "(default)" for emulator
 
-# NextAuth JWT Secret (must match UI)
-NEXTAUTH_SECRET=your-nextauth-secret
-
 # Server
 PORT=8080
 
 # CORS (comma-separated origins, or "*" for all)
 CORS_ORIGINS=http://localhost:3000,https://yourdomain.com
 ```
+
+**Note**: Firebase Admin SDK uses Application Default Credentials on GCP Cloud Run. For local development, you may need to set up service account credentials.
 
 ### Running Locally
 
@@ -77,9 +76,9 @@ uvicorn src.main:app --reload
 
 ### Authentication
 
-All endpoints require JWT authentication via `Authorization: Bearer <token>` header.
+All endpoints require Firebase authentication via `Authorization: Bearer <token>` header.
 
-The JWT must be a valid NextAuth token signed with `NEXTAUTH_SECRET`.
+The token must be a valid Firebase ID token obtained from the client-side Firebase SDK.
 
 ### Threads
 
@@ -113,14 +112,14 @@ src/
 
 - `fastapi` - Web framework
 - `uvicorn` - ASGI server
-- `pyjwt` - JWT validation
+- `firebase-admin` - Firebase Admin SDK for token verification
 - `google-cloud-firestore` - Firestore client
 - `pydantic` - Data validation
 
 ## Security
 
-- **JWT Validation**: All tokens are validated using `NEXTAUTH_SECRET`
-- **User Scoping**: `user_id` is extracted from verified JWT (not user input)
+- **Token Validation**: All Firebase ID tokens are validated using Firebase Admin SDK
+- **User Scoping**: `user_id` is extracted from verified Firebase tokens (not user input)
 - **Ownership Verification**: All data access verifies user ownership
 - **No Injection**: Owner ID comes from verified headers, preventing injection attacks
 

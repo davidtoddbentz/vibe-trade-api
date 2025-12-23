@@ -1,7 +1,7 @@
 [project]
 name = "vibe-trade-api"
 version = "0.1.0"
-description = "API server for vibe-trade with JWT authentication"
+description = "API server for vibe-trade with Firebase authentication"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.115.0",
@@ -9,7 +9,6 @@ dependencies = [
     "pydantic>=2.0.0",
     "google-cloud-firestore>=2.14.0",
     "python-dotenv>=1.0.0",
-    "pyjwt>=2.9.0",
     "python-multipart>=0.0.12",
     "firebase-admin>=6.0.0",
     "vibe-trade-mcp",

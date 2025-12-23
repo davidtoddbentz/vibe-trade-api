@@ -36,7 +36,7 @@ async def get_threads(
     Returns threads by querying strategies owned by the user.
 
     Args:
-        user_id: User ID from Firebase/NextAuth token (required)
+        user_id: User ID from Firebase token (required)
 
     Returns:
         List of threads with associated strategy information

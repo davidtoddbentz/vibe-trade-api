@@ -61,7 +61,7 @@ async def get_strategies(
     **Requires authentication** - prevents unauthenticated users from seeing all strategies.
 
     Args:
-        user_id: User ID from Firebase/NextAuth token (required)
+        user_id: User ID from Firebase token (required)
 
     Returns:
         List of user's strategies
