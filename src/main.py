@@ -1,5 +1,6 @@
 """FastAPI application with JWT authentication."""
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -8,7 +9,14 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.routes import strategies, threads
+from src.routes import strategies
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 
@@ -21,12 +29,25 @@ if env_path.exists():
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup/shutdown events."""
     # Startup
-    print("🚀 Starting Vibe Trade API Server...")
-    print(f"📡 Server running on port {os.getenv('PORT', '8080')}")
-    print("✅ Ready for requests")
+    logger.info("🚀 Starting Vibe Trade API Server...")
+    logger.info(f"📡 Server running on port {os.getenv('PORT', '8080')}")
+    logger.info(f"🔧 GOOGLE_CLOUD_PROJECT: {os.getenv('GOOGLE_CLOUD_PROJECT')}")
+    logger.info(f"🔧 FIRESTORE_DATABASE: {os.getenv('FIRESTORE_DATABASE')}")
+    logger.info(f"🔧 FIRESTORE_EMULATOR_HOST: {os.getenv('FIRESTORE_EMULATOR_HOST', 'Not set (using production)')}")
+    
+    # Log Firestore connection info
+    try:
+        from src.repositories import firestore_client
+        logger.info(f"✅ Firestore client initialized")
+        logger.info(f"   Project: {firestore_client.project}")
+        logger.info(f"   Database: {getattr(firestore_client, '_database', 'default')}")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize Firestore client: {e}", exc_info=True)
+    
+    logger.info("✅ Ready for requests")
     yield
     # Shutdown
-    print("👋 Shutting down Vibe Trade API Server...")
+    logger.info("👋 Shutting down Vibe Trade API Server...")
 
 
 # Create FastAPI app
@@ -49,7 +70,6 @@ app.add_middleware(
 )
 
 # Register routers
-app.include_router(threads.router)
 app.include_router(strategies.router)
 
 
@@ -59,12 +79,6 @@ async def health_check():
     return {"status": "healthy"}
 
 
-@app.get("/")
-async def root():
-    """Root endpoint."""
-    return {
-        "name": "Vibe Trade API",
-        "version": "0.1.0",
-        "status": "running",
-    }
+
+
 

@@ -12,26 +12,33 @@ NEXTAUTH_SECRET = os.getenv("NEXTAUTH_SECRET")
 if not NEXTAUTH_SECRET:
     raise ValueError("NEXTAUTH_SECRET environment variable is required")
 
-security = HTTPBearer()
+# Create security scheme that doesn't require auth (auto_error=False)
+security = HTTPBearer(auto_error=False)
 
 
-def get_user_id(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]
-) -> str:
-    """Extract and validate user_id from NextAuth JWT token.
+def get_user_id_optional(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> str | None:
+    """Extract and validate user_id from NextAuth JWT token (optional).
 
     Validates the JWT token from the Authorization header and extracts the user_id.
     The user_id comes from verified headers (not user input), preventing injection attacks.
+    
+    If no token is provided, returns None (auth is disabled for now).
 
     Args:
-        credentials: HTTP Bearer token from Authorization header
+        credentials: HTTP Bearer token from Authorization header (optional)
 
     Returns:
-        user_id: User identifier extracted from JWT payload
+        user_id: User identifier extracted from JWT payload, or None if no token provided
 
     Raises:
-        HTTPException: If token is invalid, expired, or missing user_id
+        HTTPException: If token is invalid or expired (only if token is provided)
     """
+    # If no credentials provided, return None (auth disabled for now)
+    if not credentials:
+        return None
+    
     token = credentials.credentials
 
     try:
@@ -71,4 +78,8 @@ def get_user_id(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Authentication error: {str(e)}",
         )
+
+
+# Alias for backward compatibility and easier use
+get_user_id = get_user_id_optional
 
