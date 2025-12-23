@@ -11,20 +11,13 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pyjwt>=2.9.0",
     "python-multipart>=0.0.12",
-      # vibe-trade-mcp>=0.1.3 is installed separately (see Makefile install target)
-    # It's from GCP Artifact Registry which requires authentication
-    # For local dev: make install uses gcloud auth print-access-token
-    # For Docker: Uses BuildKit secrets or Cloud Build service account
-    "keyrings-google-artifactregistry-auth>=1.1.2",
+    "vibe-trade-mcp",
 ]
 
-# GCP Artifact Registry index for vibe-trade-mcp package
-# For local dev: Use gcloud auth application-default login + keyring
-# For Docker/Cloud Build: Authentication is automatic via service account credentials
-[[tool.uv.index]]
-name = "gcp-artifact-registry"
-url = "https://us-central1-python.pkg.dev/vibe-trade-475704/vibe-trade-python/simple/"
-explicit = true
+# Use local path dependency for vibe-trade-mcp (sibling directory)
+# Using editable mode so package-dir mapping works correctly
+[tool.uv.sources]
+vibe-trade-mcp = { path = "../vibe-trade-mcp", editable = true }
 
 [build-system]
 requires = ["setuptools>=61.0"]
@@ -68,4 +61,3 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-

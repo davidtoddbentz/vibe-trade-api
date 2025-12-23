@@ -3,30 +3,8 @@
 
 install:
 	@echo "📦 Installing dependencies..."
+	@echo "   Using local path dependency for vibe-trade-mcp (../vibe-trade-mcp)"
 	uv sync --all-groups
-	@echo "   Installing vibe-trade-mcp from GCP Artifact Registry..."
-	@if TOKEN=$$(gcloud auth print-access-token 2>/dev/null); then \
-		echo "   Using gcloud authentication..."; \
-		uv pip install \
-			--index-url "https://oauth2accesstoken:$$TOKEN@us-central1-python.pkg.dev/vibe-trade-475704/vibe-trade-python/simple/" \
-			--extra-index-url https://pypi.org/simple/ \
-			vibe-trade-mcp; \
-	elif gcloud auth application-default print-access-token > /dev/null 2>&1; then \
-		echo "   Using application-default credentials (keyring)..."; \
-		uv pip install \
-			--index-url https://us-central1-python.pkg.dev/vibe-trade-475704/vibe-trade-python/simple/ \
-			--extra-index-url https://pypi.org/simple/ \
-			vibe-trade-mcp; \
-	else \
-		echo "⚠️  Warning: Not authenticated to GCP."; \
-		echo "   Run: gcloud auth login && gcloud auth application-default login"; \
-		echo "   Or install keyring: uv pip install keyring keyrings.google-artifactregistry-auth"; \
-		echo "   Attempting to install anyway (may fail)..."; \
-		uv pip install \
-			--index-url https://us-central1-python.pkg.dev/vibe-trade-475704/vibe-trade-python/simple/ \
-			--extra-index-url https://pypi.org/simple/ \
-			vibe-trade-mcp || true; \
-	fi
 
 # Setup for local development: install deps, fix linting, and format code
 locally: install lint-fix format
@@ -95,16 +73,17 @@ clean:
 ARTIFACT_REGISTRY_URL ?= us-central1-docker.pkg.dev/vibe-trade-475704/vibe-trade-api
 IMAGE_TAG := $(ARTIFACT_REGISTRY_URL)/vibe-trade-api:latest
 
+# Note: vibe-trade-mcp is now a local path dependency (no version pinning needed)
+
 docker-build:
 	@echo "🏗️  Building Docker image..."
 	@echo "   Image: $(IMAGE_TAG)"
-	@echo "   Getting GCP access token for Artifact Registry authentication..."
-	@gcloud auth print-access-token > /tmp/gcp_token_$$$$.txt && \
-		DOCKER_BUILDKIT=1 docker build --platform linux/amd64 \
-			--secret id=gcp_token,src=/tmp/gcp_token_$$$$.txt \
-			-t $(IMAGE_TAG) . && \
-		rm -f /tmp/gcp_token_$$$$.txt || \
-		(rm -f /tmp/gcp_token_$$$$.txt && exit 1)
+	@echo "   Using local path dependency for vibe-trade-mcp"
+	@echo "   Building from parent directory to include both projects"
+	@cd .. && DOCKER_BUILDKIT=1 docker build --platform linux/amd64 \
+		-f vibe-trade-api/Dockerfile \
+		-t $(IMAGE_TAG) \
+		.
 	@echo "✅ Build complete"
 
 docker-push:

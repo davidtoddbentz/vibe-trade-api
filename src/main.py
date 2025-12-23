@@ -35,14 +35,9 @@ async def lifespan(app: FastAPI):
     logger.info(f"🔧 FIRESTORE_DATABASE: {os.getenv('FIRESTORE_DATABASE')}")
     logger.info(f"🔧 FIRESTORE_EMULATOR_HOST: {os.getenv('FIRESTORE_EMULATOR_HOST', 'Not set (using production)')}")
     
-    # Log Firestore connection info
-    try:
-        from src.repositories import firestore_client
-        logger.info(f"✅ Firestore client initialized")
-        logger.info(f"   Project: {firestore_client.project}")
-        logger.info(f"   Database: {getattr(firestore_client, '_database', 'default')}")
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize Firestore client: {e}", exc_info=True)
+    # Log Firestore connection info (lazy - only when accessed)
+    # Don't access repositories here to avoid triggering import during startup
+    # They will be initialized when first used by endpoints
     
     logger.info("✅ Ready for requests")
     yield
