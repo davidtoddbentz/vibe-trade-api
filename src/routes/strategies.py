@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
-from src.auth import get_user_id
+from src.auth import get_user_id, get_user_id_required
 from src.repositories import card_repository, strategy_repository
 
 logger = logging.getLogger(__name__)
@@ -52,91 +52,119 @@ def _get_strategy_cards(strategy) -> list[dict]:
     return cards
 
 
-@router.get("", response_model=list[dict] | StrategyWithCardsResponse)
+@router.get("", response_model=list[dict])
 async def get_strategies(
-    user_id: Annotated[str | None, Depends(get_user_id)],
-    thread_id: str | None = Query(None, description="Optional thread_id to filter by"),
-) -> list[dict] | StrategyWithCardsResponse:
-    """Get strategies for the authenticated user.
-    
-    If thread_id is provided, returns a single strategy with cards.
-    Otherwise, returns a list of all user's strategies.
+    user_id: Annotated[str, Depends(get_user_id_required)],  # REQUIRED auth for listing
+) -> list[dict]:
+    """Get all strategies for the authenticated user.
+
+    **Requires authentication** - prevents unauthenticated users from seeing all strategies.
 
     Args:
-        user_id: User ID from JWT (optional, auth disabled for now)
-        thread_id: Optional thread_id to get strategy by thread
+        user_id: User ID from Firebase/NextAuth token (required)
 
     Returns:
-        If thread_id provided: StrategyWithCardsResponse with strategy and cards
-        Otherwise: List of user's strategies
+        List of user's strategies
+
+    Raises:
+        HTTPException: If user is not authenticated
     """
-    # If thread_id is provided, return single strategy with cards
-    if thread_id:
-        logger.info(f"Querying strategy by thread_id: {thread_id}")
-        
-        try:
-            strategy = strategy_repository.get_by_thread_id(thread_id)
-            logger.info(f"Strategy found: {strategy.id if strategy else None}")
-        except Exception as e:
-            logger.error(f"Error querying strategies by thread_id: {e}", exc_info=True)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Database error: {str(e)}",
-            )
-        
-        if not strategy:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No strategy found for thread_id: {thread_id}",
-            )
-        
-        # Verify user owns this strategy (only if authenticated and strategy has owner_id)
-        # Skip check if user_id is None (auth disabled)
-        if user_id and user_id != "anonymous_user" and strategy.owner_id and strategy.owner_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied: strategy belongs to another user",
-            )
-        
-        # Get all cards attached to this strategy
-        cards = _get_strategy_cards(strategy)
-        
-        return StrategyWithCardsResponse(
-            strategy=_build_strategy_dict(strategy),
-            cards=cards,
-            card_count=len(cards),
-        )
-    
-    # Otherwise, return list of all strategies for user
-    # If authenticated (user_id is not None and not "anonymous_user"), filter by user_id
-    # Otherwise return all strategies (auth disabled)
-    if user_id and user_id != "anonymous_user":
+    try:
         user_strategies = strategy_repository.get_by_owner_id(user_id)
-    else:
-        # Auth disabled: return all strategies
-        user_strategies = strategy_repository.get_all()
+        return [_build_strategy_dict(s) for s in user_strategies]
+    except Exception as e:
+        logger.error(f"Error querying strategies for user {user_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {str(e)}",
+        )
 
-    return [_build_strategy_dict(s) for s in user_strategies]
 
-
-@router.get("/{strategy_id}", response_model=StrategyWithCardsResponse)
-async def get_strategy_by_id(
-    strategy_id: str,
-    user_id: Annotated[str | None, Depends(get_user_id)] = None,
+@router.get("/threads/{thread_id}/strategy", response_model=StrategyWithCardsResponse)
+async def get_strategy_by_thread_id(
+    thread_id: str,
+    user_id: Annotated[str | None, Depends(get_user_id)] = None,  # Optional auth
 ) -> StrategyWithCardsResponse:
-    """Get a strategy by ID with all its attached cards.
+    """Get a strategy by thread_id with all its attached cards.
+
+    **Authentication is optional:**
+    - If strategy has no owner_id: anyone can access (unauthenticated OK)
+    - If strategy has owner_id: only the owner can access (must be authenticated and match)
 
     Args:
-        strategy_id: Strategy identifier
-        user_id: User ID from JWT (optional, auth disabled for now)
+        thread_id: Thread identifier
+        user_id: User ID from token (optional)
 
     Returns:
         Strategy data with attached cards
 
     Raises:
-        HTTPException: If strategy not found or user doesn't own it (if authenticated)
+        HTTPException: If strategy not found or access denied
     """
-    # Get strategy
+    try:
+        strategy = strategy_repository.get_by_thread_id(thread_id)
+
+        if not strategy:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No strategy found for thread_id: {thread_id}",
+            )
+
+        # Access control:
+        # - If strategy has no owner_id: anyone can access (unauthenticated OK)
+        # - If strategy has owner_id: only the owner can access
+        if strategy.owner_id:
+            if not user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Authentication required: this strategy belongs to a user",
+                )
+            if user_id != strategy.owner_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied: strategy belongs to another user",
+                )
+
+        # Strategy has no owner_id OR user is the owner - allow access
+        cards = _get_strategy_cards(strategy)
+
+        return StrategyWithCardsResponse(
+            strategy=_build_strategy_dict(strategy),
+            cards=cards,
+            card_count=len(cards),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error querying strategy by thread_id {thread_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {str(e)}",
+        )
+
+
+@router.get("/{strategy_id}", response_model=StrategyWithCardsResponse)
+async def get_strategy_by_id(
+    strategy_id: str,
+    user_id: Annotated[str | None, Depends(get_user_id)] = None,  # Optional auth
+) -> StrategyWithCardsResponse:
+    """Get a strategy by ID with all its attached cards.
+
+    **Authentication is optional:**
+    - If strategy has no owner_id: anyone can access (unauthenticated OK)
+    - If strategy has owner_id: only the owner can access (must be authenticated and match)
+
+    Args:
+        strategy_id: Strategy identifier
+        user_id: User ID from token (optional)
+
+    Returns:
+        Strategy data with attached cards
+
+    Raises:
+        HTTPException: If strategy not found or access denied
+    """
     strategy = strategy_repository.get_by_id(strategy_id)
     if strategy is None:
         raise HTTPException(
@@ -144,14 +172,22 @@ async def get_strategy_by_id(
             detail=f"Strategy not found: {strategy_id}",
         )
 
-    # Verify user owns this strategy (only if authenticated and strategy has owner_id)
-    if user_id and strategy.owner_id and strategy.owner_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: strategy belongs to another user",
-        )
+    # Access control:
+    # - If strategy has no owner_id: anyone can access (unauthenticated OK)
+    # - If strategy has owner_id: only the owner can access
+    if strategy.owner_id:
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required: this strategy belongs to a user",
+            )
+        if user_id != strategy.owner_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: strategy belongs to another user",
+            )
 
-    # Get all cards attached to this strategy
+    # Strategy has no owner_id OR user is the owner - allow access
     cards = _get_strategy_cards(strategy)
 
     return StrategyWithCardsResponse(

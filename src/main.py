@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.routes import strategies
+from src.routes import strategies, threads
 
 # Configure logging
 logging.basicConfig(
@@ -66,6 +66,7 @@ app.add_middleware(
 
 # Register routers
 app.include_router(strategies.router)
+app.include_router(threads.router)
 
 
 @app.get("/health")
