@@ -6,15 +6,13 @@ WORKDIR /workspace
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 RUN chmod +x /usr/local/bin/uv
 
-# Copy both projects to match the expected directory structure
-# pyproject.toml references ../vibe-trade-mcp, so we need:
-# /workspace/vibe-trade-api/ (where we'll work)
-# /workspace/vibe-trade-mcp/ (the dependency)
-COPY vibe-trade-mcp/ ./vibe-trade-mcp/
+# Copy only the API project
+# vibe-trade-mcp will be installed from GCP Artifact Registry
 COPY vibe-trade-api/ ./vibe-trade-api/
 
 # Install dependencies from the API directory
-# uv sync will resolve the ../vibe-trade-mcp path dependency
+# uv will use the Artifact Registry index configured in pyproject.toml
+# Authentication is automatic in Cloud Run via service account credentials
 WORKDIR /workspace/vibe-trade-api
 RUN uv sync --no-dev --frozen
 

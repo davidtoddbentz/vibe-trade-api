@@ -3,8 +3,31 @@
 
 install:
 	@echo "📦 Installing dependencies..."
-	@echo "   Using local path dependency for vibe-trade-mcp (../vibe-trade-mcp)"
-	uv sync --all-groups
+	@echo "   Step 1: Installing other dependencies (excluding vibe-trade-mcp)..."
+	@cp pyproject.toml pyproject.toml.bak && \
+	sed -i.bak2 's/"vibe-trade-mcp>=0.1.4",//' pyproject.toml && \
+	sed -i.bak2 's/, "vibe-trade-mcp>=0.1.4"//' pyproject.toml && \
+	sed -i.bak2 's/"vibe-trade-mcp>=0.1.2",//' pyproject.toml && \
+	sed -i.bak2 's/, "vibe-trade-mcp>=0.1.2"//' pyproject.toml && \
+	sed -i.bak2 's/"vibe-trade-mcp"//' pyproject.toml && \
+	sed -i.bak2 '/\[\[tool.uv.index\]\]/,/explicit = true/d' pyproject.toml && \
+	uv sync --all-groups && \
+	mv pyproject.toml.bak pyproject.toml && \
+	rm -f pyproject.toml.bak2 || \
+	(mv pyproject.toml.bak pyproject.toml; rm -f pyproject.toml.bak2; exit 1)
+	@echo "   Step 2: Installing vibe-trade-mcp from Artifact Registry..."
+	@if [ -z "$$ARTIFACT_REGISTRY_ACCESS_TOKEN" ] && [ -f .env ]; then \
+		export $$(grep -v '^#' .env | grep '^ARTIFACT_REGISTRY_ACCESS_TOKEN=' | xargs) 2>/dev/null || true; \
+	fi; \
+	if [ -z "$$ARTIFACT_REGISTRY_ACCESS_TOKEN" ]; then \
+		ARTIFACT_REGISTRY_ACCESS_TOKEN=$$(gcloud auth print-access-token 2>/dev/null) || (echo "❌ Failed to get access token. Run: gcloud auth login"; exit 1); \
+	fi; \
+	.venv/bin/python -m ensurepip --upgrade > /dev/null 2>&1; \
+	.venv/bin/python -m pip install --quiet \
+		--index-url "https://oauth2accesstoken:$$ARTIFACT_REGISTRY_ACCESS_TOKEN@us-central1-python.pkg.dev/vibe-trade-475704/vibe-trade-python/simple/" \
+		--extra-index-url https://pypi.org/simple/ \
+		"vibe-trade-mcp>=0.1.4" || (echo "❌ Failed to install vibe-trade-mcp"; exit 1)
+	@echo "✅ All dependencies installed successfully!"
 
 # Setup for local development: install deps, fix linting, and format code
 locally: install lint-fix format
@@ -73,13 +96,12 @@ clean:
 ARTIFACT_REGISTRY_URL ?= us-central1-docker.pkg.dev/vibe-trade-475704/vibe-trade-api
 IMAGE_TAG := $(ARTIFACT_REGISTRY_URL)/vibe-trade-api:latest
 
-# Note: vibe-trade-mcp is now a local path dependency (no version pinning needed)
+# Note: vibe-trade-mcp is installed from Artifact Registry during `make install`
 
 docker-build:
 	@echo "🏗️  Building Docker image..."
 	@echo "   Image: $(IMAGE_TAG)"
-	@echo "   Using local path dependency for vibe-trade-mcp"
-	@echo "   Building from parent directory to include both projects"
+	@echo "   vibe-trade-mcp will be installed from Artifact Registry in Docker"
 	@cd .. && DOCKER_BUILDKIT=1 docker build --platform linux/amd64 \
 		-f vibe-trade-api/Dockerfile \
 		-t $(IMAGE_TAG) \

@@ -11,13 +11,21 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "python-multipart>=0.0.12",
     "firebase-admin>=6.0.0",
-    "vibe-trade-mcp",
+    "vibe-trade-mcp>=0.1.4",
 ]
 
-# Use local path dependency for vibe-trade-mcp (sibling directory)
-# Using editable mode so package-dir mapping works correctly
-[tool.uv.sources]
-vibe-trade-mcp = { path = "../vibe-trade-mcp", editable = true }
+# Artifact Registry index configuration for vibe-trade-mcp
+# Note: uv doesn't natively support OAuth token auth for private indexes
+# So we install vibe-trade-mcp separately with pip, then uv sync handles the rest
+# In Docker/Cloud Run, service account credentials work automatically
+[[tool.uv.index]]
+name = "gcp-artifact-registry"
+url = "https://us-central1-python.pkg.dev/vibe-trade-475704/vibe-trade-python/simple/"
+explicit = true
+
+# Local development override (uncomment for local dev with path dependency):
+# [tool.uv.sources]
+# vibe-trade-mcp = { path = "../vibe-trade-mcp", editable = true }
 
 [build-system]
 requires = ["setuptools>=61.0"]
